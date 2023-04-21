@@ -10,6 +10,10 @@ class ServerWorker:
     PLAY = 'PLAY'
     PAUSE = 'PAUSE'
     TEARDOWN = 'TEARDOWN'
+    DESCRIBE = 'DESCRIBE'
+    FORWARD = 'FORWARD'
+    BACKWARD = 'BACKWARD'
+    SWITCH = 'SWITCH'
 
     INIT = 0
     READY = 1
@@ -24,6 +28,7 @@ class ServerWorker:
 
     def __init__(self, clientInfo):
         self.clientInfo = clientInfo
+        self.frameNumber = 1
 
     def run(self):
         threading.Thread(target=self.recvRtspRequest).start()
@@ -49,7 +54,7 @@ class ServerWorker:
 
         # Get the RTSP sequence number
         seq = request[1].split(' ')
-
+        print(requestType)
         # Process SETUP request
         if requestType == self.SETUP:
             if self.state == self.INIT:
@@ -96,6 +101,7 @@ class ServerWorker:
                 self.clientInfo['event'].set()
 
                 self.replyRtsp(self.OK_200, seq[1])
+                self.frameNumber = 1
 
         # Process TEARDOWN request
         elif requestType == self.TEARDOWN:
@@ -107,6 +113,40 @@ class ServerWorker:
 
             # Close the RTP socket
             self.clientInfo['rtpSocket'].close()
+        elif requestType == self.FORWARD:
+            print("processing FORWARD\n")
+            if self.state == self.PLAYING:
+                self.frameNumber = 3
+        elif requestType == self.BACKWARD:
+            print("processing BACKWARD\n")
+            if self.state == self.PLAYING:
+                self.state = self.READY
+                self.clientInfo['event'].set()
+                self.clientInfo['rtpSocket'].close()
+                self.clientInfo['videoStream'].goBackward()
+                self.state = self.PLAYING
+                self.clientInfo["rtpSocket"] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self.clientInfo['event'] = threading.Event()
+                self.clientInfo['worker'] = threading.Thread(target=self.sendRtp)
+                self.clientInfo['worker'].start()
+        elif requestType == self.SWITCH:
+            print("processing SWITCH\n")
+            self.state = self.READY
+            self.clientInfo['event'].set()
+            self.clientInfo['rtpSocket'].close()
+            try:
+                self.clientInfo['videoStream'] = VideoStream(filename)
+                self.frameNumber = 1
+            except IOError:
+                self.replyRtsp(self.FILE_NOT_FOUND_404, seq[1])
+            self.state = self.PLAYING
+            self.clientInfo["rtpSocket"] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.clientInfo['event'] = threading.Event()
+            self.clientInfo['worker'] = threading.Thread(target=self.sendRtp)
+            self.clientInfo['worker'].start()
+        elif requestType == self.DESCRIBE:
+            print("processing DESCRIBE\n")
+            self.replyDescribeRtsp()
 
     def sendRtp(self):
         """Send RTP packets over UDP."""
@@ -117,7 +157,7 @@ class ServerWorker:
             if self.clientInfo['event'].isSet():
                 break
 
-            data = self.clientInfo['videoStream'].nextFrame()
+            data = self.clientInfo['videoStream'].nextNFrame(self.frameNumber)
             if data:
                 frameNumber = self.clientInfo['videoStream'].frameNbr()
                 try:
@@ -157,3 +197,7 @@ class ServerWorker:
             print("404 NOT FOUND")
         elif code == self.CON_ERR_500:
             print("500 CONNECTION ERROR")
+    def replyDescribeRtsp(self):
+        reply = 'RTSP/1.0\nSession: ' + str(self.clientInfo['session'])+'\nEncoding: UTF-8'
+        connSocket = self.clientInfo['rtspSocket'][0]
+        connSocket.send(reply.encode())
