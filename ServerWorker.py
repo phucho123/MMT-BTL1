@@ -29,6 +29,7 @@ class ServerWorker:
     def __init__(self, clientInfo):
         self.clientInfo = clientInfo
         self.frameNumber = 1
+        self.curFileName = ""
 
     def run(self):
         threading.Thread(target=self.recvRtspRequest).start()
@@ -64,6 +65,7 @@ class ServerWorker:
                 try:
                     self.clientInfo['videoStream'] = VideoStream(filename)
                     self.state = self.READY
+                    self.curFileName = filename
                 except IOError:
                     self.replyRtsp(self.FILE_NOT_FOUND_404, seq[1])
 
@@ -116,34 +118,37 @@ class ServerWorker:
         elif requestType == self.FORWARD:
             print("processing FORWARD\n")
             if self.state == self.PLAYING:
-                self.frameNumber = 3
+                self.frameNumber = 4
         elif requestType == self.BACKWARD:
             print("processing BACKWARD\n")
             if self.state == self.PLAYING:
+                self.frameNumber = 1
                 self.state = self.READY
                 self.clientInfo['event'].set()
-                self.clientInfo['rtpSocket'].close()
+                # self.clientInfo['rtpSocket'].close()
                 self.clientInfo['videoStream'].goBackward()
                 self.state = self.PLAYING
-                self.clientInfo["rtpSocket"] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self.clientInfo['rtpSocket'] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 self.clientInfo['event'] = threading.Event()
                 self.clientInfo['worker'] = threading.Thread(target=self.sendRtp)
                 self.clientInfo['worker'].start()
         elif requestType == self.SWITCH:
             print("processing SWITCH\n")
-            self.state = self.READY
-            self.clientInfo['event'].set()
-            self.clientInfo['rtpSocket'].close()
-            try:
-                self.clientInfo['videoStream'] = VideoStream(filename)
-                self.frameNumber = 1
-            except IOError:
-                self.replyRtsp(self.FILE_NOT_FOUND_404, seq[1])
-            self.state = self.PLAYING
-            self.clientInfo["rtpSocket"] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.clientInfo['event'] = threading.Event()
-            self.clientInfo['worker'] = threading.Thread(target=self.sendRtp)
-            self.clientInfo['worker'].start()
+            if self.curFileName !=  filename:
+                self.curFileName = filename
+                self.state = self.READY
+                self.clientInfo['event'].set()
+                # self.clientInfo['rtpSocket'].close()
+                try:
+                    self.clientInfo['videoStream'] = VideoStream(filename)
+                    self.frameNumber = 1
+                except IOError:
+                    self.replyRtsp(self.FILE_NOT_FOUND_404, seq[1])
+            # self.state = self.PLAYING
+            # self.clientInfo["rtpSocket"] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # self.clientInfo['event'] = threading.Event()
+            # self.clientInfo['worker'] = threading.Thread(target=self.sendRtp)
+            # self.clientInfo['worker'].start()
         elif requestType == self.DESCRIBE:
             print("processing DESCRIBE\n")
             self.replyDescribeRtsp()

@@ -42,6 +42,7 @@ class Client:
         self.frameNbr = 0
         self.movies = ["movie.Mjpeg","video.mjpeg"]
         self.movieIndex = 0
+        self.preRequest = self.requestSent
 
     def createWidgets(self):
         """Build GUI."""
@@ -90,7 +91,7 @@ class Client:
         #Create Switch button
         self.switch = Button(self.master, width=20, padx=3, pady=3,bg='violet')
         self.switch["text"] = "Switch"
-        self.switch["command"] = self.switching
+        self.switch["command"] = self.onClickSwitchButton
         self.switch.grid(row=2, column=3, padx=2, pady=2)
 
         # Create a label to display the movie
@@ -100,6 +101,28 @@ class Client:
         self.text_box = Text(self.master, height=5, width=50)
         self.text_box.grid(row=3, column=0, columnspan=4, padx=2, pady=2)
 
+        self.selected = StringVar()
+        self.selected.set("movie.Mjpeg")
+
+    def onClickSwitchButton(self):
+        self.label.destroy()
+        self.pauseMovie()
+        self.choices = ['movie.Mjpeg', 'video.mjpeg']
+        # self.selected = StringVar()
+        # self.selected.set("movie.Mjpeg")
+        self.opitonMenu = OptionMenu(self.master, self.selected, *self.choices)
+        self.opitonMenu.grid(row=0, column=1,columnspan=2)
+
+        self.submitOption = Button( self.master , text = "Switch Video",bg="lightgreen")
+        self.submitOption["command"] = self.onClickSubmitSwitch
+        self.submitOption.grid(row=0, column=2, padx=2, pady=2,columnspan=2)
+    def onClickSubmitSwitch(self):
+        self.opitonMenu.destroy()
+        self.submitOption.destroy()
+        self.switching()
+        self.label = Label(self.master, height=19)
+        self.label.grid(row=0, column=0, columnspan=4, sticky=W + E + N + S, padx=5, pady=5)
+        self.playMovie()
     def setupMovie(self):
         """Setup button handler."""
         if self.state == self.INIT:
@@ -151,7 +174,7 @@ class Client:
                     if self.requestSent == self.BACKWARD or currFrameNbr >= self.frameNbr:  # Discard the late packet
                         self.frameNbr = currFrameNbr
                         self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
-                        self.requestSent = self.PLAY
+                        self.requestSent = self.preRequest
             except:
                 # Stop listening upon requesting PAUSE or TEARDOWN
                 if self.playEvent.isSet():
@@ -255,7 +278,8 @@ class Client:
                         "Session: " + str(self.sessionId))
 
             # Keep track of the sent request.
-            self.requestSent = self.FORWARD
+            # self.preRequest = self.requestSent
+            # self.requestSent = self.FORWARD
         elif requestCode == self.BACKWARD:
             # Update RTSP sequence number.
             self.rtspSeq = self.rtspSeq + 1
@@ -266,20 +290,24 @@ class Client:
                         "Session: " + str(self.sessionId))
 
             # Keep track of the sent request.
+            self.preRequest = self.requestSent
             self.requestSent = self.BACKWARD
         elif requestCode == self.SWITCH:
             # Update RTSP sequence number.
             self.rtspSeq = self.rtspSeq + 1
             self.movieIndex = (self.movieIndex+1)%len(self.movies)
-            self.fileName = self.movies[self.movieIndex]
-            self.frameNbr = 0
+            # self.fileName = self.movies[self.movieIndex]
+            if self.fileName != self.selected.get():
+                self.fileName = self.selected.get()
+                self.frameNbr = 0
             # Write the RTSP request to be sent.
             request = ( "SWITCH " + str(self.fileName) + " RTSP/1.0" + "\n"
                         "CSeq: " + str(self.rtspSeq) + "\n"
                         "Session: " + str(self.sessionId))
 
             # Keep track of the sent request.
-            self.requestSent = self.SWITCH
+            # self.preRequest = self.requestSent
+            # self.requestSent = self.SWITCH
         elif requestCode == self.DESCRIBE:
             # Update RTSP sequence number.
             self.rtspSeq = self.rtspSeq + 1
@@ -289,6 +317,7 @@ class Client:
                         "Session: " + str(self.sessionId))
 
             # Keep track of the sent request.
+            self.preRequest = self.requestSent
             self.requestSent = self.DESCRIBE
         else:
             return
@@ -307,7 +336,7 @@ class Client:
                 self.parseRtspReply(reply.decode("utf-8"))
                 if self.requestSent == self.DESCRIBE: 
                    self.text_box.insert(END,reply.decode("utf-8")+"\n")
-                   self.requestSent = self.PLAY
+                   self.requestSent = self.preRequest
 
             # Close the RTSP socket upon requesting Teardown
             if self.requestSent == self.TEARDOWN:

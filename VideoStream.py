@@ -41,7 +41,7 @@ class VideoStream:
 	
 	def goBackward(self):
 		# print(self.dataArray)
-		for i in range(0,80):
+		for i in range(0,90):
 			if self.frameNum > 0:
 				self.file.seek(-(5+self.dataArray[self.frameNum-1]),1)
 				self.frameNum-=1
