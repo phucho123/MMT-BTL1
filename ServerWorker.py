@@ -66,6 +66,7 @@ class ServerWorker:
                     self.clientInfo['videoStream'] = VideoStream(filename)
                     self.state = self.READY
                     self.curFileName = filename
+                    
                 except IOError:
                     self.replyRtsp(self.FILE_NOT_FOUND_404, seq[1])
 
@@ -74,7 +75,7 @@ class ServerWorker:
 
                 # Send RTSP reply
                 self.replyRtsp(self.OK_200, seq[1])
-
+                self.replyVideoLen()
                 # Get the RTP/UDP port from the last line
                 self.clientInfo['rtpPort'] = request[2].split(' ')[3]
 
@@ -142,6 +143,7 @@ class ServerWorker:
                 try:
                     self.clientInfo['videoStream'] = VideoStream(filename)
                     self.frameNumber = 1
+                    self.replyVideoLen()
                 except IOError:
                     self.replyRtsp(self.FILE_NOT_FOUND_404, seq[1])
             # self.state = self.PLAYING
@@ -204,5 +206,9 @@ class ServerWorker:
             print("500 CONNECTION ERROR")
     def replyDescribeRtsp(self):
         reply = 'RTSP/1.0\nSession: ' + str(self.clientInfo['session'])+'\nEncoding: UTF-8'
+        connSocket = self.clientInfo['rtspSocket'][0]
+        connSocket.send(reply.encode())
+    def replyVideoLen(self):
+        reply = 'RTSP/1.0 200 OK\nCSeq: ' + '-10' + '\nSession: ' + str(self.clientInfo['session']) + '\nVideoLen: '+str(self.clientInfo['videoStream'].maxlen)
         connSocket = self.clientInfo['rtspSocket'][0]
         connSocket.send(reply.encode())

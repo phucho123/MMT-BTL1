@@ -3,12 +3,25 @@ class VideoStream:
 		self.filename = filename
 		self.dataArray = []
 		self.curlen = 0
+		self.maxlen = 0
 		try:
 			self.file = open(filename, 'rb')
 		except:
 			raise IOError
 		self.frameNum = 0
-		
+		self.getLen()
+
+	def getLen(self):
+		while True:
+			data = self.file.read(5)
+			if data:
+				framelength = int(data)
+				data = self.file.read(framelength)
+				self.maxlen+=1
+			else:
+				break
+		self.file.seek(0)
+
 	def nextFrame(self):
 		"""Get next frame."""
 		data = self.file.read(5) # Get the framelength from the first 5 bits

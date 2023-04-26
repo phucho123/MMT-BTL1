@@ -98,8 +98,12 @@ class Client:
         self.label = Label(self.master, height=19)
         self.label.grid(row=0, column=0, columnspan=4, sticky=W + E + N + S, padx=5, pady=5)
 
-        self.text_box = Text(self.master, height=5, width=50)
-        self.text_box.grid(row=3, column=0, columnspan=4, padx=2, pady=2)
+        self.text_box = Text(self.master, height=5,width=20)
+        self.text_box.grid(row=3, column=1)
+        self.time_box = Text(self.master, height=5,width=20)
+        self.time_box.grid(row=3, column=2)
+        self.time_box.insert(END,"Time Remain:\n")
+        self.time_box.insert(END,"00:00\n")
 
         self.selected = StringVar()
         self.selected.set("movie.Mjpeg")
@@ -170,11 +174,19 @@ class Client:
 
                     currFrameNbr = rtpPacket.seqNum()
                     print("Current Seq Num: " + str(currFrameNbr))
-
+                        
                     if self.requestSent == self.BACKWARD or currFrameNbr >= self.frameNbr:  # Discard the late packet
                         self.frameNbr = currFrameNbr
                         self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
                         self.requestSent = self.preRequest
+
+                        self.time_box.delete("2.0", "3.0")
+                        time = int((self.videoLen-currFrameNbr)/20)
+                        minute = '0' + str(int(time/60)) if int(time/60) < 10 else str(int(time/60))
+                        second = '0' + str(time%60) if time%60 < 10 else str(time%60)
+                        self.time_box.insert(END,minute+':'+second+'\n')
+                        # self.time_box.insert(END,str(int((self.videoLen-currFrameNbr)/20))+'\n')
+
             except:
                 # Stop listening upon requesting PAUSE or TEARDOWN
                 if self.playEvent.isSet():
@@ -348,7 +360,13 @@ class Client:
         """Parse the RTSP reply from the server."""
         lines = data.split('\n')
         seqNum = int(lines[1].split(' ')[1])
-
+        if len(lines) == 4:
+            self.time_box.delete("2.0", "3.0")
+            self.videoLen = int(lines[3].split(' ')[1])
+            time = int(self.videoLen/20)
+            minute = '0' + str(int(time/60)) if int(time/60) < 10 else str(int(time/60))
+            second = '0' + str(time%60) if time%60 < 10 else str(time%60)
+            self.time_box.insert(END,minute+':'+second+'\n')
         # Process only if the server reply's sequence number is the same as the request's
         if seqNum == self.rtspSeq:
             session = int(lines[2].split(' ')[1])
@@ -380,6 +398,9 @@ class Client:
 
                         # Flag the teardownAcked to close the socket.
                         self.teardownAcked = 1
+                # elif len(lines) == 4:
+                #     self.videoLen = int(lines[3].split(' ')[1])
+                #     self.time_box.insert(END,self.videoLen)
 
 
 
